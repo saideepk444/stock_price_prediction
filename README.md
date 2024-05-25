@@ -37,3 +37,9 @@ With the necessary packages installed, you can run the app using:
 
 ```sh
 streamlit run model.py
+
+### Live Application
+
+The Stock Price Prediction app is currently hosted and can be accessed at the following URL:
+
+[https://stockpriceprediction-tdsfbndn9w7vssk8semfvc.streamlit.app/](https://stockpriceprediction-tdsfbndn9w7vssk8semfvc.streamlit.app/)
