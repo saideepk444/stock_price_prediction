@@ -37,6 +37,7 @@ With the necessary packages installed, you can run the app using:
 
 ```sh
 streamlit run model.py
+```
 
 ### Live Application
 
