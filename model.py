@@ -16,43 +16,60 @@ API_KEY = "0177c21f33c260c026bc186a1b286d58"
 
 # Function to fetch stock data from Market Stack
 def get_stock_data_marketstack(stock_symbol, start_date, end_date):
-    try:
-        base_url = "https://api.marketstack.com/v1/eod"
-        params = {
-            "access_key": API_KEY,
-            "symbols": stock_symbol,
-            "date_from": start_date,
-            "date_to": end_date,
-            "limit": 1000,
-        }
+    base_url = "https://api.marketstack.com/v1/eod"
+    params = {
+        "access_key": API_KEY,
+        "symbols": stock_symbol,
+        "date_from": start_date,
+        "date_to": end_date,
+        "limit": 1000,
+    }
 
-        response = requests.get(base_url, params=params)
-        data = response.json()
+    response = requests.get(base_url, params=params)
+    data = response.json()
 
-        if "data" not in data:
-            st.error("No valid data received from Market Stack API.")
-            return None
+    # Check for request limits in headers (if available)
+    request_headers = response.headers
+    remaining_requests = request_headers.get("X-RateLimit-Remaining", "N/A")
+    reset_time = request_headers.get("X-RateLimit-Reset", "N/A")
 
-        df = pd.DataFrame(data["data"])
+    # Display request limit info in the sidebar
+    st.sidebar.info(f"Requests Remaining: {remaining_requests}")
+    if reset_time != "N/A":
+        reset_time = datetime.fromtimestamp(int(reset_time))
+        st.sidebar.info(f"Limit Resets On: {reset_time.strftime('%Y-%m-%d %H:%M:%S')}")
 
-        # Select a price column to use
-        if 'close' in df.columns:
-            df['Price'] = df['close']
-        elif 'open' in df.columns:
-            st.warning("Using 'Open' price as 'Close' price is unavailable.")
-            df['Price'] = df['open']
-        else:
-            st.error("Neither 'Close' nor 'Open' price columns are available in the data.")
-            return None
-
-        # Convert the date column to datetime
-        df['date'] = pd.to_datetime(df['date'])
-        df = df.sort_values('date')
-
-        return df
-    except Exception as e:
-        st.error(f"Error fetching stock data: {e}")
+    # Check if the API returned valid data
+    if "data" not in data:
+        st.error("No valid data received from Market Stack API.")
         return None
+
+    df = pd.DataFrame(data["data"])
+
+    # Select a price column to use
+    if 'close' in df.columns:
+        df['Price'] = df['close']
+    elif 'open' in df.columns:
+        st.warning("Using 'Open' price as 'Close' price is unavailable.")
+        df['Price'] = df['open']
+    else:
+        st.error("Neither 'Close' nor 'Open' price columns are available in the data.")
+        return None
+
+    # Convert the date column to datetime
+    df['date'] = pd.to_datetime(df['date'])
+    df = df.sort_values('date')
+
+    # Increment request counter manually
+    increment_request_count()
+
+    return df
+
+# Function to manually track requests (stored in Streamlit session state)
+def increment_request_count():
+    if "request_count" not in st.session_state:
+        st.session_state.request_count = 0
+    st.session_state.request_count += 1
 
 # Main function to run the Streamlit app
 def main():
@@ -60,6 +77,9 @@ def main():
     st.sidebar.title("Stock Prediction App")
     st.sidebar.markdown("**Created by [Saideep Kasipathy](https://www.linkedin.com/in/sdk4/)**")
     st.sidebar.info("Enter a stock symbol and explore the market trends and future predictions.")
+
+    # Display request count in the sidebar
+    st.sidebar.info(f"Total Requests Made: {st.session_state.get('request_count', 0)}")
 
     # Input for stock symbol
     stock_symbol = st.sidebar.text_input("Enter a Stock Symbol", value="AAPL").upper()
@@ -156,3 +176,4 @@ def main():
 # Ensure the script runs properly when executed
 if __name__ == "__main__":
     main()
+
