@@ -34,10 +34,6 @@ def get_stock_data_marketstack(stock_symbol, start_date, end_date):
     reset_time = request_headers.get("X-RateLimit-Reset", "N/A")
 
     # Display request limit info in the sidebar
-    st.sidebar.info(f"Requests Remaining: {remaining_requests}")
-    if reset_time != "N/A":
-        reset_time = datetime.fromtimestamp(int(reset_time))
-        st.sidebar.info(f"Limit Resets On: {reset_time.strftime('%Y-%m-%d %H:%M:%S')}")
 
     # Check if the API returned valid data
     if "data" not in data:
