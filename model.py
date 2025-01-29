@@ -63,12 +63,28 @@ scaler = StandardScaler()
 def tech_indicators():
     st.header('Technical Indicators')
 
+    # Debugging: Check if data exists
+    if data is None or not isinstance(data, pd.DataFrame) or data.empty:
+        st.error("Error: Data could not be retrieved. Check stock symbol or date range.")
+        return
+
+    # Debugging: Display first few rows
+    st.write("Sample Data:", data.head())
+
     if 'Close' not in data.columns:
         st.error("Error: 'Close' column not found in data.")
         return
 
-    data['Close'] = data['Close'].fillna(method='ffill')
-    data['Close'] = pd.to_numeric(data['Close'], errors='coerce')
+    # Ensure 'Close' column is a valid numeric series
+    try:
+        data['Close'] = pd.to_numeric(data['Close'], errors='coerce')
+    except Exception as e:
+        st.error(f"Error converting 'Close' column: {e}")
+        return
+
+    if data['Close'].isna().all():
+        st.error("Error: 'Close' column contains only NaN values.")
+        return
 
     if len(data) < 20:
         st.error("Error: Not enough data to compute Bollinger Bands.")
@@ -108,6 +124,7 @@ def tech_indicators():
         st.line_chart(sma)
     elif option == 'EMA':
         st.line_chart(ema)
+
 
 
 
