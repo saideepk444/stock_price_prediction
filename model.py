@@ -59,8 +59,12 @@ def main():
     df = get_stock_data_yf(stock_symbol, start_date, end_date)
 
     if df is not None:
-        # Drop rows with missing data in the selected price column
-        df = df.dropna(subset=["Price"])
+        # Check if 'Price' column exists before dropping NaN values
+        if 'Price' in df.columns:
+            df = df.dropna(subset=["Price"])
+        else:
+            st.error("The 'Price' column is missing after fetching data.")
+            return
 
         if df.empty:
             st.error("No valid data points found after removing NaN values.")
@@ -138,4 +142,3 @@ def main():
 # Ensure the script runs properly when executed
 if __name__ == "__main__":
     main()
-
