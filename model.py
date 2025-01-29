@@ -19,10 +19,16 @@ def get_stock_data(stock_symbol, start_date, end_date):
     response = requests.get(url)
     data = response.json()
 
+    # Debug: Print response status and raw data
+    st.write("API Response Status:", response.status_code)
+    st.write("Response Data:", data)
+
+    # Check if the API returned valid stock data
     if "Time Series (Daily)" not in data:
-        st.error("Failed to retrieve stock data. Check the symbol or API key.")
+        st.error("Failed to retrieve valid stock data. Check the symbol or API key.")
         return None
 
+    # Convert data to DataFrame
     df = pd.DataFrame.from_dict(data["Time Series (Daily)"], orient="index", dtype=float)
     df = df.rename(columns={"1. open": "Open", "2. high": "High", "3. low": "Low", "4. close": "Close", "5. volume": "Volume"})
     df.index = pd.to_datetime(df.index)
@@ -49,6 +55,10 @@ def main():
     today = datetime.today()
     start_date = st.sidebar.date_input("Start Date", today - timedelta(days=365))
     end_date = st.sidebar.date_input("End Date", today)
+
+    # Retry button to fetch data again
+    if st.sidebar.button("Retry Fetching Data"):
+        st.info("Retrying data fetch...")
 
     df = get_stock_data(stock_symbol, start_date, end_date)
 
@@ -132,4 +142,3 @@ def main():
 # Ensure the script runs properly when executed
 if __name__ == "__main__":
     main()
-
