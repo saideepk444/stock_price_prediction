@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import requests
+import yfinance as yf
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from sklearn.preprocessing import MinMaxScaler
@@ -11,35 +11,18 @@ from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, r2_score
 
-# Function to fetch stock data from Alpha Vantage
-def get_stock_data(stock_symbol, start_date, end_date):
-    API_KEY = "5YU56HI73O1R1OBX"  # Your Alpha Vantage API key
-    url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={stock_symbol}&apikey={API_KEY}&outputsize=full"
-
-    response = requests.get(url)
-    data = response.json()
-
-    # Debug: Print response status and raw data
-    st.write("API Response Status:", response.status_code)
-    st.write("Response Data:", data)
-
-    # Check if the API returned valid stock data
-    if "Time Series (Daily)" not in data:
-        st.error("Failed to retrieve valid stock data. Check the symbol or API key.")
+# Function to fetch stock data using yfinance
+@st.cache_data
+def get_stock_data_yf(stock_symbol, start_date, end_date):
+    try:
+        df = yf.download(stock_symbol, start=start_date, end=end_date, progress=False)
+        if df.empty:
+            st.error("No data available for the selected stock and date range.")
+            return None
+        return df
+    except Exception as e:
+        st.error(f"Error fetching stock data: {e}")
         return None
-
-    # Convert data to DataFrame
-    df = pd.DataFrame.from_dict(data["Time Series (Daily)"], orient="index", dtype=float)
-    df = df.rename(columns={"1. open": "Open", "2. high": "High", "3. low": "Low", "4. close": "Close", "5. volume": "Volume"})
-    df.index = pd.to_datetime(df.index)
-    df = df.loc[start_date:end_date]
-
-    # Ensure data is not empty
-    if df.empty:
-        st.error("No data available for the selected stock and date range.")
-        return None
-
-    return df[::-1]
 
 # Main function to run the Streamlit app
 def main():
@@ -60,7 +43,8 @@ def main():
     if st.sidebar.button("Retry Fetching Data"):
         st.info("Retrying data fetch...")
 
-    df = get_stock_data(stock_symbol, start_date, end_date)
+    # Fetch data using yfinance
+    df = get_stock_data_yf(stock_symbol, start_date, end_date)
 
     if df is not None:
         # Drop rows with missing data
