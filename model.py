@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import yfinance as yf
+import requests
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from sklearn.preprocessing import MinMaxScaler
@@ -11,25 +11,43 @@ from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, r2_score
 
-# Function to fetch stock data using yfinance
-@st.cache_data
-def get_stock_data_yf(stock_symbol, start_date, end_date):
+# Market Stack API key
+API_KEY = "0177c21f33c260c026bc186a1b286d58"
+
+# Function to fetch stock data from Market Stack
+def get_stock_data_marketstack(stock_symbol, start_date, end_date):
     try:
-        df = yf.download(stock_symbol, start=start_date, end=end_date, progress=False)
+        base_url = "https://api.marketstack.com/v1/eod"
+        params = {
+            "access_key": API_KEY,
+            "symbols": stock_symbol,
+            "date_from": start_date,
+            "date_to": end_date,
+            "limit": 1000,
+        }
+
+        response = requests.get(base_url, params=params)
+        data = response.json()
+
+        if "data" not in data:
+            st.error("No valid data received from Market Stack API.")
+            return None
+
+        df = pd.DataFrame(data["data"])
 
         # Select a price column to use
-        if 'Close' in df.columns:
-            df['Price'] = df['Close']
-        elif 'Open' in df.columns:
+        if 'close' in df.columns:
+            df['Price'] = df['close']
+        elif 'open' in df.columns:
             st.warning("Using 'Open' price as 'Close' price is unavailable.")
-            df['Price'] = df['Open']
+            df['Price'] = df['open']
         else:
             st.error("Neither 'Close' nor 'Open' price columns are available in the data.")
             return None
 
-        if df.empty:
-            st.error("No data available for the selected stock and date range.")
-            return None
+        # Convert the date column to datetime
+        df['date'] = pd.to_datetime(df['date'])
+        df = df.sort_values('date')
 
         return df
     except Exception as e:
@@ -48,23 +66,19 @@ def main():
 
     # Date range selection
     today = datetime.today()
-    start_date = st.sidebar.date_input("Start Date", today - timedelta(days=365))
-    end_date = st.sidebar.date_input("End Date", today)
+    start_date = st.sidebar.date_input("Start Date", today - timedelta(days=365)).isoformat()
+    end_date = st.sidebar.date_input("End Date", today).isoformat()
 
     # Retry button to fetch data again
     if st.sidebar.button("Retry Fetching Data"):
         st.info("Retrying data fetch...")
 
-    # Fetch data using yfinance
-    df = get_stock_data_yf(stock_symbol, start_date, end_date)
+    # Fetch data using Market Stack
+    df = get_stock_data_marketstack(stock_symbol, start_date, end_date)
 
     if df is not None:
-        # Check if 'Price' column exists before dropping NaN values
-        if 'Price' in df.columns:
-            df = df.dropna(subset=["Price"])
-        else:
-            st.error("The 'Price' column is missing after fetching data.")
-            return
+        # Drop rows with missing data in the 'Price' column
+        df = df.dropna(subset=["Price"])
 
         if df.empty:
             st.error("No valid data points found after removing NaN values.")
@@ -76,7 +90,7 @@ def main():
 
         # Plot stock price
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=df.index, y=df["Price"], mode="lines", name="Price", line=dict(color="royalblue")))
+        fig.add_trace(go.Scatter(x=df["date"], y=df["Price"], mode="lines", name="Price", line=dict(color="royalblue")))
         fig.update_layout(title=f"Stock Price of {stock_symbol}", xaxis_title="Date", yaxis_title="Price")
         st.plotly_chart(fig, use_container_width=True)
 
@@ -127,14 +141,14 @@ def main():
         forecast = model.predict(future_features)
 
         # Display predictions
-        future_dates = [df.index[-1] + timedelta(days=i) for i in range(1, prediction_days + 1)]
+        future_dates = [df["date"].iloc[-1] + timedelta(days=i) for i in range(1, prediction_days + 1)]
         forecast_df = pd.DataFrame({"Date": future_dates, "Predicted Price": forecast})
         st.write("**Predicted Stock Prices:**")
         st.dataframe(forecast_df)
 
         # Plot predictions
         fig_pred = go.Figure()
-        fig_pred.add_trace(go.Scatter(x=df.index, y=df["Price"], mode="lines", name="Historical Price", line=dict(color="gray")))
+        fig_pred.add_trace(go.Scatter(x=df["date"], y=df["Price"], mode="lines", name="Historical Price", line=dict(color="gray")))
         fig_pred.add_trace(go.Scatter(x=future_dates, y=forecast, mode="lines+markers", name="Predicted Price", line=dict(color="red")))
         fig_pred.update_layout(title=f"Predicted Stock Prices for {stock_symbol}", xaxis_title="Date", yaxis_title="Price")
         st.plotly_chart(fig_pred, use_container_width=True)
