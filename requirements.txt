@@ -1,7 +1,5 @@
 streamlit
 pandas
-yfinance
-ta
-datetime
+requests
+plotly
 scikit-learn
-xgboost
