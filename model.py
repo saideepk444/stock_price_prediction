@@ -1,206 +1,105 @@
 import streamlit as st
 import pandas as pd
-import yfinance as yf
-from ta.volatility import BollingerBands
-from ta.trend import MACD, EMAIndicator, SMAIndicator
-from ta.momentum import RSIIndicator
-import datetime
-from datetime import date
-from sklearn.preprocessing import StandardScaler
+import requests
+import plotly.graph_objects as go
+from datetime import datetime, timedelta
+from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression
-from sklearn.neighbors import KNeighborsRegressor
-from xgboost import XGBRegressor
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.ensemble import ExtraTreesRegressor
-from sklearn.metrics import r2_score, mean_absolute_error
+from sklearn.linear_model import Ridge
+from sklearn.svm import SVR
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.metrics import mean_absolute_error, r2_score
+
+# App title and sidebar info
+st.set_page_config(page_title="Stock Prediction by Saideep Kasipathy", layout="wide")
+st.sidebar.title("Stock Prediction App")
+st.sidebar.markdown("**Created by [Saideep Kasipathy](https://www.linkedin.com/in/sdk4/)**")
+st.sidebar.info("Enter a stock symbol and explore the market trends and future predictions.")
+
+# Input for stock symbol
+stock_symbol = st.sidebar.text_input("Enter a Stock Symbol", value="AAPL").upper()
+
+# Date range selection
+today = datetime.today()
+start_date = st.sidebar.date_input("Start Date", today - timedelta(days=365))
+end_date = st.sidebar.date_input("End Date", today)
+
+# Fetch stock data from Alpha Vantage API
+API_KEY = "5YU56HI73O1R1OBX"  # Replace with your own Alpha Vantage API key
+url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={stock_symbol}&apikey={API_KEY}&outputsize=full"
+
+@st.cache_data
+def get_stock_data():
+    response = requests.get(url)
+    data = response.json()
+    if "Time Series (Daily)" not in data:
+        st.error("Failed to retrieve stock data. Check the symbol or API key.")
+        return None
+    df = pd.DataFrame.from_dict(data["Time Series (Daily)"], orient="index", dtype=float)
+    df = df.rename(columns={"1. open": "Open", "2. high": "High", "3. low": "Low", "4. close": "Close", "5. volume": "Volume"})
+    df.index = pd.to_datetime(df.index)
+    df = df.loc[start_date:end_date]
+    return df[::-1]
+
+df = get_stock_data()
+
+if df is not None:
+    # Display stock data
+    st.header(f"Stock Data for {stock_symbol}")
+    st.dataframe(df.tail(10))
+
+    # Plot stock price
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=df.index, y=df["Close"], mode="lines", name="Close Price", line=dict(color="royalblue")))
+    fig.update_layout(title=f"Stock Closing Price of {stock_symbol}", xaxis_title="Date", yaxis_title="Price")
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Model selection and prediction
+    st.header("Stock Price Prediction")
+    model_choice = st.selectbox("Choose a prediction model", ["Ridge Regression", "Decision Tree", "SVR", "Gradient Boosting"])
+    prediction_days = st.slider("Days to Forecast", min_value=1, max_value=30, value=7)
+
+    # Prepare data for training
+    df["Target"] = df["Close"].shift(-prediction_days)
+    features = df[["Close"]].values
+    scaler = MinMaxScaler()
+    features_scaled = scaler.fit_transform(features)
+    X = features_scaled[:-prediction_days]
+    y = df["Target"].dropna().values
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Train selected model
+    models = {
+        "Ridge Regression": Ridge(),
+        "Decision Tree": DecisionTreeRegressor(),
+        "SVR": SVR(),
+        "Gradient Boosting": GradientBoostingRegressor()
+    }
+    model = models[model_choice]
+    model.fit(X_train, y_train)
+    predictions = model.predict(X_test)
+
+    # Evaluate model
+    st.write(f"**Model: {model_choice}**")
+    st.write(f"R² Score: {r2_score(y_test, predictions):.2f}")
+    st.write(f"Mean Absolute Error: {mean_absolute_error(y_test, predictions):.2f}")
+
+    # Forecast future prices
+    future_features = features_scaled[-prediction_days:]
+    forecast = model.predict(future_features)
+
+    # Display predictions
+    future_dates = [df.index[-1] + timedelta(days=i) for i in range(1, prediction_days + 1)]
+    forecast_df = pd.DataFrame({"Date": future_dates, "Predicted Price": forecast})
+    st.write("**Predicted Stock Prices:**")
+    st.dataframe(forecast_df)
+
+    # Plot predictions
+    fig_pred = go.Figure()
+    fig_pred.add_trace(go.Scatter(x=df.index, y=df["Close"], mode="lines", name="Historical Close Price", line=dict(color="gray")))
+    fig_pred.add_trace(go.Scatter(x=future_dates, y=forecast, mode="lines+markers", name="Predicted Price", line=dict(color="red")))
+    fig_pred.update_layout(title=f"Predicted Stock Prices for {stock_symbol}", xaxis_title="Date", yaxis_title="Price")
+    st.plotly_chart(fig_pred, use_container_width=True)
 
 
-st.title('Stock Price Predictions')
-st.sidebar.info(
-    'Welcome to the Stock Price Prediction App. Choose your options below')
-st.sidebar.info(
-    "Created and designed by [Saideep Kasipathy](https://www.linkedin.com/in/saideepk4/)")
-
-
-def main():
-    option = st.sidebar.selectbox(
-        'Make a choice', ['Visualize', 'Recent Data', 'Predict'])
-    if option == 'Visualize':
-        tech_indicators()
-    elif option == 'Recent Data':
-        dataframe()
-    else:
-        predict()
-
-
-@st.cache_resource
-def download_data(op, start_date, end_date):
-    df = yf.download(op, start=start_date, end=end_date, progress=False)
-    return df
-
-
-option = st.sidebar.text_input('Enter a Stock Symbol', value='SPY')
-option = option.upper()
-today = datetime.date.today()
-duration = st.sidebar.number_input('Enter the duration', value=3000)
-before = today - datetime.timedelta(days=duration)
-start_date = st.sidebar.date_input('Start Date', value=before)
-end_date = st.sidebar.date_input('End date', today)
-if st.sidebar.button('Send'):
-    if start_date < end_date:
-        st.sidebar.success('Start date: `%s`\n\nEnd date: `%s`' %
-                           (start_date, end_date))
-        download_data(option, start_date, end_date)
-    else:
-        st.sidebar.error('Error: End date must fall after start date')
-
-
-data = download_data(option, start_date, end_date)
-scaler = StandardScaler()
-
-
-def tech_indicators():
-    st.header('Technical Indicators')
-
-    # Debug: Check if `data` is a DataFrame
-    if data is None or not isinstance(data, pd.DataFrame):
-        st.error("Error: Data is not a DataFrame. Check Yahoo Finance API response.")
-        return
-
-    # Debug: Check if data is empty
-    if data.empty:
-        st.error("Error: No data was retrieved. Check the stock symbol or date range.")
-        return
-
-    # Debug: Print data structure
-    st.write("### Sample Data", data.head())  # Show first few rows
-    st.write("### Column Names", list(data.columns))  # Show column names
-    st.write("### Data Type", type(data))  # Show type of data
-
-    # Ensure 'Close' exists
-    if 'Close' not in data.columns:
-        st.error("Error: 'Close' column not found in data.")
-        return
-
-    # Debug: Check type of `data['Close']`
-    st.write("### Type of data['Close']", type(data['Close']))
-
-    # Ensure 'Close' is a valid numeric series
-    try:
-        data['Close'] = pd.to_numeric(data['Close'], errors='coerce')
-    except Exception as e:
-        st.error(f"Error converting 'Close' column: {e}")
-        return
-
-    # Ensure 'Close' is not all NaN
-    if data['Close'].isna().all():
-        st.error("Error: 'Close' column contains only NaN values.")
-        return
-
-    if len(data) < 20:
-        st.error("Error: Not enough data to compute Bollinger Bands.")
-        return
-
-    # Compute indicators
-    bb_indicator = BollingerBands(data['Close'])
-    bb = data.copy()
-    bb['bb_h'] = bb_indicator.bollinger_hband()
-    bb['bb_l'] = bb_indicator.bollinger_lband()
-
-    # Drop NaN values
-    bb = bb.dropna(subset=['bb_h', 'bb_l'])
-
-    # MACD
-    macd = MACD(data['Close']).macd().dropna()
-    # RSI
-    rsi = RSIIndicator(data['Close']).rsi().dropna()
-    # SMA
-    sma = SMAIndicator(data['Close'], window=14).sma_indicator().dropna()
-    # EMA
-    ema = EMAIndicator(data['Close']).ema_indicator().dropna()
-
-    # Display
-    option = st.radio('Choose a Technical Indicator to Visualize', [
-                      'Close', 'BB', 'MACD', 'RSI', 'SMA', 'EMA'])
-
-    if option == 'Close':
-        st.line_chart(data['Close'])
-    elif option == 'BB':
-        st.line_chart(bb[['Close', 'bb_h', 'bb_l']])
-    elif option == 'MACD':
-        st.line_chart(macd)
-    elif option == 'RSI':
-        st.line_chart(rsi)
-    elif option == 'SMA':
-        st.line_chart(sma)
-    elif option == 'EMA':
-        st.line_chart(ema)
-
-
-
-
-
-def dataframe():
-    st.header('Recent Data')
-    st.dataframe(data.tail(10))
-
-
-def predict():
-    model = st.radio('Choose a model', ['LinearRegression', 'RandomForestRegressor',
-                     'ExtraTreesRegressor', 'KNeighborsRegressor', 'XGBoostRegressor'])
-    num = st.number_input('How many days forecast?', value=5)
-    num = int(num)
-    if st.button('Predict'):
-        if model == 'LinearRegression':
-            engine = LinearRegression()
-            model_engine(engine, num)
-        elif model == 'RandomForestRegressor':
-            engine = RandomForestRegressor()
-            model_engine(engine, num)
-        elif model == 'ExtraTreesRegressor':
-            engine = ExtraTreesRegressor()
-            model_engine(engine, num)
-        elif model == 'KNeighborsRegressor':
-            engine = KNeighborsRegressor()
-            model_engine(engine, num)
-        else:
-            engine = XGBRegressor()
-            model_engine(engine, num)
-
-
-def model_engine(model, num):
-    # getting only the closing price
-    df = data[['Close']]
-    # shifting the closing price based on number of days forecast
-    df['preds'] = data.Close.shift(-num)
-    # scaling the data
-    x = df.drop(['preds'], axis=1).values
-    x = scaler.fit_transform(x)
-    # storing the last num_days data
-    x_forecast = x[-num:]
-    # selecting the required values for training
-    x = x[:-num]
-    # getting the preds column
-    y = df.preds.values
-    # selecting the required values for training
-    y = y[:-num]
-
-    # spliting the data
-    x_train, x_test, y_train, y_test = train_test_split(
-        x, y, test_size=.2, random_state=7)
-    # training the model
-    model.fit(x_train, y_train)
-    preds = model.predict(x_test)
-    st.text(f'r2_score: {r2_score(y_test, preds)} \
-            \nMAE: {mean_absolute_error(y_test, preds)}')
-    # predicting stock price based on the number of days
-    forecast_pred = model.predict(x_forecast)
-    day = 1
-    for i in forecast_pred:
-        st.text(f'Day {day}: {i}')
-        day += 1
-
-
-if __name__ == '__main__':
-    main()
