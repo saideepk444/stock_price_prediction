@@ -16,9 +16,21 @@ from sklearn.metrics import mean_absolute_error, r2_score
 def get_stock_data_yf(stock_symbol, start_date, end_date):
     try:
         df = yf.download(stock_symbol, start=start_date, end=end_date, progress=False)
+
+        # Select a price column to use
+        if 'Close' in df.columns:
+            df['Price'] = df['Close']
+        elif 'Open' in df.columns:
+            st.warning("Using 'Open' price as 'Close' price is unavailable.")
+            df['Price'] = df['Open']
+        else:
+            st.error("Neither 'Close' nor 'Open' price columns are available in the data.")
+            return None
+
         if df.empty:
             st.error("No data available for the selected stock and date range.")
             return None
+
         return df
     except Exception as e:
         st.error(f"Error fetching stock data: {e}")
@@ -47,8 +59,8 @@ def main():
     df = get_stock_data_yf(stock_symbol, start_date, end_date)
 
     if df is not None:
-        # Drop rows with missing data
-        df = df.dropna(subset=["Close"])
+        # Drop rows with missing data in the selected price column
+        df = df.dropna(subset=["Price"])
 
         if df.empty:
             st.error("No valid data points found after removing NaN values.")
@@ -60,8 +72,8 @@ def main():
 
         # Plot stock price
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=df.index, y=df["Close"], mode="lines", name="Close Price", line=dict(color="royalblue")))
-        fig.update_layout(title=f"Stock Closing Price of {stock_symbol}", xaxis_title="Date", yaxis_title="Price")
+        fig.add_trace(go.Scatter(x=df.index, y=df["Price"], mode="lines", name="Price", line=dict(color="royalblue")))
+        fig.update_layout(title=f"Stock Price of {stock_symbol}", xaxis_title="Date", yaxis_title="Price")
         st.plotly_chart(fig, use_container_width=True)
 
         # Model selection and prediction
@@ -70,8 +82,8 @@ def main():
         prediction_days = st.slider("Days to Forecast", min_value=1, max_value=30, value=7)
 
         # Prepare data for training
-        df["Target"] = df["Close"].shift(-prediction_days)
-        features = df[["Close"]].values
+        df["Target"] = df["Price"].shift(-prediction_days)
+        features = df[["Price"]].values
 
         # Ensure features are valid for scaling
         if len(features) == 0:
@@ -118,7 +130,7 @@ def main():
 
         # Plot predictions
         fig_pred = go.Figure()
-        fig_pred.add_trace(go.Scatter(x=df.index, y=df["Close"], mode="lines", name="Historical Close Price", line=dict(color="gray")))
+        fig_pred.add_trace(go.Scatter(x=df.index, y=df["Price"], mode="lines", name="Historical Price", line=dict(color="gray")))
         fig_pred.add_trace(go.Scatter(x=future_dates, y=forecast, mode="lines+markers", name="Predicted Price", line=dict(color="red")))
         fig_pred.update_layout(title=f"Predicted Stock Prices for {stock_symbol}", xaxis_title="Date", yaxis_title="Price")
         st.plotly_chart(fig_pred, use_container_width=True)
@@ -126,3 +138,4 @@ def main():
 # Ensure the script runs properly when executed
 if __name__ == "__main__":
     main()
+
