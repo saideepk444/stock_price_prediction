@@ -13,7 +13,7 @@ from sklearn.metrics import mean_absolute_error, r2_score
 
 # Function to fetch stock data from Alpha Vantage
 def get_stock_data(stock_symbol, start_date, end_date):
-    API_KEY = "5YU56HI73O1R1OBX"  # Replace with your actual Alpha Vantage API key
+    API_KEY = "5YU56HI73O1R1OBX"  # Your Alpha Vantage API key
     url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={stock_symbol}&apikey={API_KEY}&outputsize=full"
 
     response = requests.get(url)
@@ -132,6 +132,4 @@ def main():
 # Ensure the script runs properly when executed
 if __name__ == "__main__":
     main()
-
-
 
