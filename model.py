@@ -63,25 +63,37 @@ scaler = StandardScaler()
 def tech_indicators():
     st.header('Technical Indicators')
 
-    # Debugging: Check if data exists
-    if data is None or not isinstance(data, pd.DataFrame) or data.empty:
-        st.error("Error: Data could not be retrieved. Check stock symbol or date range.")
+    # Debug: Check if `data` is a DataFrame
+    if data is None or not isinstance(data, pd.DataFrame):
+        st.error("Error: Data is not a DataFrame. Check Yahoo Finance API response.")
         return
 
-    # Debugging: Display first few rows
-    st.write("Sample Data:", data.head())
+    # Debug: Check if data is empty
+    if data.empty:
+        st.error("Error: No data was retrieved. Check the stock symbol or date range.")
+        return
 
+    # Debug: Print data structure
+    st.write("### Sample Data", data.head())  # Show first few rows
+    st.write("### Column Names", list(data.columns))  # Show column names
+    st.write("### Data Type", type(data))  # Show type of data
+
+    # Ensure 'Close' exists
     if 'Close' not in data.columns:
         st.error("Error: 'Close' column not found in data.")
         return
 
-    # Ensure 'Close' column is a valid numeric series
+    # Debug: Check type of `data['Close']`
+    st.write("### Type of data['Close']", type(data['Close']))
+
+    # Ensure 'Close' is a valid numeric series
     try:
         data['Close'] = pd.to_numeric(data['Close'], errors='coerce')
     except Exception as e:
         st.error(f"Error converting 'Close' column: {e}")
         return
 
+    # Ensure 'Close' is not all NaN
     if data['Close'].isna().all():
         st.error("Error: 'Close' column contains only NaN values.")
         return
@@ -124,6 +136,7 @@ def tech_indicators():
         st.line_chart(sma)
     elif option == 'EMA':
         st.line_chart(ema)
+
 
 
 
