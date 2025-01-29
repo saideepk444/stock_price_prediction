@@ -62,43 +62,53 @@ scaler = StandardScaler()
 
 def tech_indicators():
     st.header('Technical Indicators')
+
+    if 'Close' not in data.columns:
+        st.error("Error: 'Close' column not found in data.")
+        return
+
+    data['Close'] = data['Close'].fillna(method='ffill')
+    data['Close'] = pd.to_numeric(data['Close'], errors='coerce')
+
+    if len(data) < 20:
+        st.error("Error: Not enough data to compute Bollinger Bands.")
+        return
+
+    # Compute indicators
+    bb_indicator = BollingerBands(data['Close'])
+    bb = data.copy()
+    bb['bb_h'] = bb_indicator.bollinger_hband()
+    bb['bb_l'] = bb_indicator.bollinger_lband()
+
+    # Drop NaN values
+    bb = bb.dropna(subset=['bb_h', 'bb_l'])
+
+    # MACD
+    macd = MACD(data['Close']).macd().dropna()
+    # RSI
+    rsi = RSIIndicator(data['Close']).rsi().dropna()
+    # SMA
+    sma = SMAIndicator(data['Close'], window=14).sma_indicator().dropna()
+    # EMA
+    ema = EMAIndicator(data['Close']).ema_indicator().dropna()
+
+    # Display
     option = st.radio('Choose a Technical Indicator to Visualize', [
                       'Close', 'BB', 'MACD', 'RSI', 'SMA', 'EMA'])
 
-    # Bollinger bands
-    bb_indicator = BollingerBands(data.Close)
-    bb = data
-    bb['bb_h'] = bb_indicator.bollinger_hband()
-    bb['bb_l'] = bb_indicator.bollinger_lband()
-    # Creating a new dataframe
-    bb = bb[['Close', 'bb_h', 'bb_l']]
-    # MACD
-    macd = MACD(data.Close).macd()
-    # RSI
-    rsi = RSIIndicator(data.Close).rsi()
-    # SMA
-    sma = SMAIndicator(data.Close, window=14).sma_indicator()
-    # EMA
-    ema = EMAIndicator(data.Close).ema_indicator()
-
     if option == 'Close':
-        st.write('Close Price')
-        st.line_chart(data.Close)
+        st.line_chart(data['Close'])
     elif option == 'BB':
-        st.write('BollingerBands')
-        st.line_chart(bb)
+        st.line_chart(bb[['Close', 'bb_h', 'bb_l']])
     elif option == 'MACD':
-        st.write('Moving Average Convergence Divergence')
         st.line_chart(macd)
     elif option == 'RSI':
-        st.write('Relative Strength Indicator')
         st.line_chart(rsi)
     elif option == 'SMA':
-        st.write('Simple Moving Average')
         st.line_chart(sma)
-    else:
-        st.write('Expoenetial Moving Average')
+    elif option == 'EMA':
         st.line_chart(ema)
+
 
 
 def dataframe():
