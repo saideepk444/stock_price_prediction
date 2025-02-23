@@ -28,16 +28,22 @@ def get_stock_data_marketstack(stock_symbol, start_date, end_date):
     response = requests.get(base_url, params=params)
     data = response.json()
 
+    # Debugging: Print the API response and status code
+    st.write(f"API Response Status Code: {response.status_code}")
+    st.write(f"API Response: {data}")
+
     # Check for request limits in headers (if available)
     request_headers = response.headers
     remaining_requests = request_headers.get("X-RateLimit-Remaining", "N/A")
     reset_time = request_headers.get("X-RateLimit-Reset", "N/A")
 
     # Display request limit info in the sidebar
+    st.sidebar.info(f"Remaining Requests: {remaining_requests}")
+    st.sidebar.info(f"Reset Time: {reset_time}")
 
     # Check if the API returned valid data
     if "data" not in data:
-        st.error("Request Limit for the Month has been reached.")
+        st.error(f"Error: {data.get('error', {}).get('message', 'Unknown error')}")
         return None
 
     df = pd.DataFrame(data["data"])
@@ -172,4 +178,3 @@ def main():
 # Ensure the script runs properly when executed
 if __name__ == "__main__":
     main()
-
