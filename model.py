@@ -37,7 +37,7 @@ def get_stock_data_marketstack(stock_symbol, start_date, end_date):
 
     # Check if the API returned valid data
     if "data" not in data:
-        st.error("No valid data received from Market Stack API.")
+        st.error("Request Limit for the Month has been reached.")
         return None
 
     df = pd.DataFrame(data["data"])
